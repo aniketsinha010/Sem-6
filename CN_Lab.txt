@@ -1,0 +1,298 @@
+General Router Configuration : 
+- When connecting a router to a LAN, assign an IP address to the router interface that belongs to 
+the same network as the LAN devices. This IP address will act as the default gateway for the hosts. 
+For eg, if in a network you assign two pcs ip addresses 192.168.10.1 and 192.168.10.2, then the 
+port of the router should have ip address 192.168.10.3 and the default gateways of the pcs should 
+also be 192.168.10.3
+- While connecting two routers in WAN first add serial port and then to the serial ports of both 
+the routers add ip addresses from a network that is already not in use.
+
+--------------------------------------------------------------------------------------------------------
+
+Static Routing protocol :
+
+Do the connections and assign ip addresses to the pcs and routers. Then in the Static section of the 
+routers add : 
+- the ip address of the destination network.
+- the subnet mask
+- the ip address of the other router.
+
+--------------------------------------------------------------------------------------------------------
+
+Dynamic Routing protocol using EIGRP : 
+
+Do everything the same as RIP until the RIP part. Then write this in CLI : 
+
+Router 0 : 
+Router>enable
+Router#config terminal
+Enter configuration commands, one per line.  End with CNTL/Z.
+Router(config)#router eigrp 2
+Router(config-router)#network 192.168.10.0
+Router(config-router)#network 192.168.30.0
+Router(config-router)#exit
+Router(config)#exit
+
+Router 1 : 
+Router>
+Router>enable
+Router#config terminal
+Enter configuration commands, one per line.  End with CNTL/Z.
+Router(config)#router eigrp 2
+Router(config-router)#network 192.168.20.0
+Router(config-router)#network 192.168.30.0
+
+--------------------------------------------------------------------------------------------------------
+
+Dynamic Routing protocol using OSPF : 
+
+Do everything the same as RIP until the RIP part. Then write this in CLI : 
+
+Router 0 : 
+Router>enable
+Router#config terminal
+Router(config)#router ospf 2
+Router(config-router)#network 192.168.10.0 0.0.0.255 area 2
+Router(config-router)#network 192.168.30.0 0.0.0.255 area 2
+Router(config-router)#ex
+Router(config)#ex
+
+Router 1 : 
+Router>enable
+Router#config terminal
+Router(config)#router ospf 2
+Router(config-router)#network 192.168.20.0 0.0.0.255 area 2 (wildcard mask)
+Router(config-router)#network 192.168.30.0 0.0.0.255 area 2
+
+--------------------------------------------------------------------------------------------------------
+
+Dynamic Routing protocol using RIP : 
+
+In the RIP section of the router add the ip addresses of the netwroks to which the ports of the 
+networks are connected.That is : 
+- the ip address of the LAN that is connected to the router
+- ip address of the network to which both the routers are connected.
+
+--------------------------------------------------------------------------------------------------------
+
+Standard ACL : 
+
+First do full RIP setup. Then : 
+On the router closest to the server : 
+
+Router#
+Router#config terminal
+Router(config)#access-list 2 deny host 192.168.10.2
+Router(config)#access-list 2 permit any
+Router(config)#interface GigabitEthernet0/0
+Router(config-if)#ip access-group 2 out
+Router(config-if)#exit
+Router(config)#exit
+
+
+
+To Block a complete LAN : 
+Router>
+Router>en
+Router#config t
+Router(config)#access-list ?
+  <1-99>     IP standard access list
+  <100-199>  IP extended access list
+Router(config)#access-list 2 deny 192.168.10.0 0.0.0.255
+Router(config)#access-list 2 permit any
+Router(config)#int Gig0/0
+Router(config-if)#ip access-group 2 out
+Router(config-if)#ex
+Router(config)#ex
+Router#
+
+--------------------------------------------------------------------------------------------------------
+
+1. TCP Client (MyClient.java) : 
+
+import java.io.*;
+import java.net.*;
+
+public class MyClient {
+    public static void main(String[] args) {
+        try {
+            Socket s = new Socket("localhost", 6666);
+            DataOutputStream dout = new DataOutputStream(s.getOutputStream());
+            dout.writeUTF("Hello Server");
+            dout.flush();
+            dout.close();
+            s.close();
+        } catch (Exception e) {
+            System.out.println(e);
+        }
+    }
+}
+
+------------------------------------------------------------------------------------------
+
+2. TCP Server (MyServer.java) : 
+
+import java.io.*;
+import java.net.*;
+
+public class MyServer {
+    public static void main(String[] args) {
+        try {
+            ServerSocket ss = new ServerSocket(6666);
+            Socket s = ss.accept(); // establishes connection
+            DataInputStream dis = new DataInputStream(s.getInputStream());
+            String str = (String) dis.readUTF();
+            System.out.println("message = " + str);
+            ss.close();
+        } catch (Exception e) {
+            System.out.println(e);
+        }
+    }
+}
+
+------------------------------------------------------------------------------------------
+
+3. UDP Client (UDPClient.java) : 
+
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.util.Scanner;
+
+public class UDPClient {
+    public static void main(String[] args) throws Exception {
+        DatagramSocket ds = new DatagramSocket();
+        Scanner sc = new Scanner(System.in);
+        System.out.print("Enter your message: ");
+        String s = sc.nextLine();
+        
+        // Convert message to bytes
+        byte[] b = s.getBytes();
+        InetAddress ia = InetAddress.getLocalHost();
+        
+        // Send packet to server (port 9999)
+        DatagramPacket dp = new DatagramPacket(b, b.length, ia, 9999);
+        ds.send(dp);
+        
+        // Receive reply from server
+        byte[] b1 = new byte[1024];
+        DatagramPacket dp1 = new DatagramPacket(b1, b1.length);
+        ds.receive(dp1);
+        String str = new String(dp1.getData(), 0, dp1.getLength());
+        System.out.println("Reply from server is: " + str);
+        
+        ds.close();
+        sc.close();
+    }
+}
+
+------------------------------------------------------------------------------------------
+
+4. UDP Server (UDPServer.java) : 
+
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+
+public class UDPServer {
+    public static void main(String[] args) throws Exception {
+        // Create DatagramSocket at port 9999
+        DatagramSocket ds = new DatagramSocket(9999);
+        System.out.println("UDP Server is running...");
+        
+        // Buffer to receive data
+        byte[] b1 = new byte[1024];
+        
+        // DatagramPacket to receive data
+        DatagramPacket dp = new DatagramPacket(b1, b1.length);
+        
+        // --- THIS IS THE MISSING CODE ---
+        
+        // 1. Actually receive the packet from the client
+        ds.receive(dp);
+        String str = new String(dp.getData(), 0, dp.getLength());
+        System.out.println("Message from Client: " + str);
+        
+        // 2. Prepare a reply to send back
+        String reply = "Message received loud and clear!";
+        byte[] b2 = reply.getBytes();
+        
+        // 3. Get the client's IP and Port from the packet we just received
+        InetAddress clientAddress = dp.getAddress();
+        int clientPort = dp.getPort();
+        
+        // 4. Send the reply packet back to the client
+        DatagramPacket replyPacket = new DatagramPacket(b2, b2.length, clientAddress, clientPort);
+        ds.send(replyPacket);
+        
+        // 5. Close the socket
+        ds.close();
+    }
+}
+
+------------------------------------------------------------------------------------------
+
+How to run : 
+
+1. Save the files
+Create a new folder on your computer to keep things organized. Inside that folder, create four separate text files and paste the corresponding code into each.
+
+Crucial Note: In Java, the file name must exactly match the public class name, including capitalization.
+
+Save TCP Client as: MyClient.java
+
+Save TCP Server as: MyServer.java
+
+Save UDP Client as: UDPClient.java
+
+Save UDP Server as: UDPServer.java (Make sure to use the completed version I provided in the previous message, otherwise it will just crash!)
+
+2. Open your terminal
+Open your terminal or command prompt and use the cd command to navigate to the folder where you just saved those four files.
+(Example: cd Documents/JavaSockets)
+
+3. Compile the code
+Before Java can run the code, it needs to translate it into a readable format called bytecode. Type the following command and press Enter:
+
+Bash
+javac MyClient.java MyServer.java UDPClient.java UDPServer.java
+If this works perfectly, it will output nothing and just give you a new line. You will now see .class files in your folder alongside your .java files.
+
+Phase 2: Running the TCP Programs
+1. Start the Server
+In your current terminal window, start the TCP server by typing:
+
+Bash
+java MyServer
+The terminal will look like it's frozen or hanging. This is correct! The server is now actively listening on port 6666, waiting for a client to connect.
+
+2. Start the Client
+Open a completely new, second terminal window. Navigate to the same folder using the cd command again. Then, run the client:
+
+Bash
+java MyClient
+3. Observe the result
+Look back at your first terminal window (the server). You should instantly see it print: message = Hello Server. Both programs will then automatically close.
+
+Phase 3: Running the UDP Programs
+You will follow the exact same logic as above using your two terminal windows.
+
+1. Start the Server
+In your first terminal window, type:
+
+Bash
+java UDPServer
+It will print "UDP Server is running..." and wait.
+
+2. Start the Client
+In your second terminal window, type:
+
+Bash
+java UDPClient
+3. Interact
+The client terminal will prompt you with Enter your message:. Type anything you want (e.g., "Testing UDP!") and press Enter.
+
+You will see the message appear on the Server terminal, and your Client terminal will print out the reply: Reply from server is: Message received loud and clear!.
+
+
+
